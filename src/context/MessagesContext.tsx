@@ -19,63 +19,13 @@ interface MessagesContextType {
   setStatusFilter: (filter: MessageStatus | 'todos') => void;
 }
 
-// Semilla de mensajes iniciales con coordenadas geoespaciales reales
-const INITIAL_MESSAGES: GeoMessage[] = [
-  {
-    id: 'msg-seed-1',
-    authorId: 'user-demo-1',
-    authorName: 'ExploradorGeo',
-    authorColor: nintendoTheme.colors.avatarColors[0],
-    content: '¡Bienvenidos a la Plaza GeoPicto! Explora notas contextuales en 3D.',
-    latitude: 4.6382,
-    longitude: -74.0841,
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    expiresAt: new Date(Date.now() + 3600000 * 22).toISOString(),
-    status: 'publicado',
-  },
-  {
-    id: 'msg-seed-2',
-    authorId: 'user-demo-2',
-    authorName: 'ViajeroContextual',
-    authorColor: nintendoTheme.colors.avatarColors[1],
-    content: 'Café delicioso cerca de la fuente central. ¡Recomendado!',
-    latitude: 4.6395,
-    longitude: -74.0825,
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    expiresAt: new Date(Date.now() + 3600000 * 19).toISOString(),
-    status: 'publicado',
-  },
-  {
-    id: 'msg-seed-3',
-    authorId: 'user-demo-3',
-    authorName: 'ComunidadLocal',
-    authorColor: nintendoTheme.colors.avatarColors[2],
-    content: 'Nota informativa en proceso de validación por los guardianes de la plaza.',
-    latitude: 4.6368,
-    longitude: -74.0858,
-    createdAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-    expiresAt: new Date(Date.now() + 3600000 * 23).toISOString(),
-    status: 'pendiente',
-  },
-  {
-    id: 'msg-seed-4',
-    authorId: 'user-demo-2',
-    authorName: 'ViajeroContextual',
-    authorColor: nintendoTheme.colors.avatarColors[1],
-    content: 'Mensaje archivado que ha sido ocultado de la vista pública general.',
-    latitude: 4.6408,
-    longitude: -74.0862,
-    createdAt: new Date(Date.now() - 3600000 * 10).toISOString(),
-    expiresAt: new Date(Date.now() + 3600000 * 14).toISOString(),
-    status: 'oculto',
-  },
-];
+import { BOGOTA_SEED_MESSAGES } from '../data/bogotaMessages';
 
 const MessagesContext = createContext<MessagesContextType | undefined>(undefined);
 
 export const MessagesProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<GeoMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<GeoMessage[]>(BOGOTA_SEED_MESSAGES);
   const [selectedMessage, setSelectedMessage] = useState<GeoMessage | null>(null);
   const [statusFilter, setStatusFilter] = useState<MessageStatus | 'todos'>('todos');
 
