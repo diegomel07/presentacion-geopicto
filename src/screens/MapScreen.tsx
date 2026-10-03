@@ -11,11 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
 import { useMessages } from '../context/MessagesContext';
-import { GeoMessage, LocationCoords, MessageStatus, MapStyleConfig } from '../types';
+import { GeoMessage, LocationCoords, MessageStatus } from '../types';
 import { nintendoTheme } from '../theme/nintendoTheme';
-import { DEFAULT_MAP_STYLE_CONFIG } from '../theme/mapPresets';
 import { MapLibreOsmView } from '../components/map/MapLibreOsmView';
-import { MapStyleConfigModal } from '../components/map/MapStyleConfigModal';
 import { CreateMessageModal } from '../components/messages/CreateMessageModal';
 import { MessageDetailModal } from '../components/messages/MessageDetailModal';
 import { PictoChatCard } from '../components/common/PictoChatCard';
@@ -45,10 +43,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [targetComposeCoords, setTargetComposeCoords] = useState<LocationCoords>(DEFAULT_COORDS);
   const [bottomListExpanded, setBottomListExpanded] = useState(false);
-
-  // Estado para la configuración de estilos del mapa (edificios 3D, agua, vías, parques)
-  const [mapStyleConfig, setMapStyleConfig] = useState<MapStyleConfig>(DEFAULT_MAP_STYLE_CONFIG);
-  const [styleModalVisible, setStyleModalVisible] = useState(false);
 
   // Obtener geolocalización del dispositivo
   useEffect(() => {
@@ -105,24 +99,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
             </View>
           </View>
 
-          {/* Acciones superiores (Personalizar estilos del mapa + Salir) */}
-          <View style={styles.topRightActions}>
-            <TouchableOpacity
-              style={styles.iconActionButton}
-              onPress={() => setStyleModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="color-palette-outline" size={18} color={nintendoTheme.colors.wiiBlue} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.exitButton}
-              onPress={onLogout}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="log-out-outline" size={16} color={nintendoTheme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
+          {/* Botón de salir / cerrar sesión */}
+          <TouchableOpacity
+            style={styles.exitButton}
+            onPress={onLogout}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={16} color={nintendoTheme.colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Barra horizontal de filtros de estado estilo píldora Nintendo */}
@@ -159,17 +143,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
           </ScrollView>
         </View>
 
-        {/* Mapa Isométrico 3D MapLibre con OpenStreetMap y estilos configurables */}
+        {/* Mapa Isométrico 3D MapLibre con OpenStreetMap */}
         <View style={styles.mapContainer}>
           <MapLibreOsmView
             userLocation={userLocation}
             messages={activeMessages}
             onSelectMessage={handleSelectMessage}
-            styleConfig={mapStyleConfig}
-            onOpenStyleConfig={() => setStyleModalVisible(true)}
           />
 
-          {/* Botón Flotante de Acción (FAB) con forma de Stylus PictoChat */}
+          {/* Botón Flotante de Acción (FAB) con forma de Stylus PictoChat ubicado en la esquina inferior izquierda */}
           <TouchableOpacity
             style={styles.composeFab}
             onPress={handleOpenCreateModal}
@@ -228,14 +210,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
             </ScrollView>
           )}
         </View>
-
-        {/* Modal para configurar estilos de capas del mapa (edificios, ríos, vías, parques) */}
-        <MapStyleConfigModal
-          visible={styleModalVisible}
-          onClose={() => setStyleModalVisible(false)}
-          config={mapStyleConfig}
-          onChangeConfig={setMapStyleConfig}
-        />
 
         {/* Modal de Creación de Mensaje (140 caracteres) */}
         <CreateMessageModal
@@ -309,21 +283,6 @@ const styles = StyleSheet.create({
     color: nintendoTheme.colors.textSecondary,
     fontWeight: '500',
   },
-  topRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  iconActionButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F0F6F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DFE8E5',
-  },
   exitButton: {
     width: 34,
     height: 34,
@@ -369,8 +328,8 @@ const styles = StyleSheet.create({
   },
   composeFab: {
     position: 'absolute',
-    bottom: 24,
-    left: 18,
+    bottom: 20,
+    left: 16,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: nintendoTheme.colors.miiverseGreen,

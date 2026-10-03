@@ -24,13 +24,3 @@ export interface LocationCoords {
   latitude: number;
   longitude: number;
 }
-
-export interface MapStyleConfig {
-  presetId: string;
-  buildingColor: string;
-  buildingHeightMultiplier: number;
-  buildingOpacity: number;
-  waterColor: string;
-  roadColor: string;
-  parkColor: string;
-}

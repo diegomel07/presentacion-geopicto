@@ -7,9 +7,8 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GeoMessage, LocationCoords, MapStyleConfig } from '../../types';
+import { GeoMessage, LocationCoords } from '../../types';
 import { nintendoTheme } from '../../theme/nintendoTheme';
-import { DEFAULT_MAP_STYLE_CONFIG } from '../../theme/mapPresets';
 
 // WebView condicional para plataformas nativas
 let WebViewComponent: any = null;
@@ -25,24 +24,19 @@ interface MapLibreOsmViewProps {
   userLocation: LocationCoords;
   messages: GeoMessage[];
   onSelectMessage: (message: GeoMessage) => void;
-  styleConfig?: MapStyleConfig;
-  onOpenStyleConfig?: () => void;
 }
 
 export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
   userLocation,
   messages,
   onSelectMessage,
-  styleConfig = DEFAULT_MAP_STYLE_CONFIG,
-  onOpenStyleConfig,
 }) => {
   const webViewRef = useRef<any>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // Generamos el HTML embebido de MapLibre con OpenStreetMap, perspectiva isométrica 3D y personalización dinámica
+  // Generamos el HTML embebido de MapLibre con OpenStreetMap y perspectiva isométrica 3D
   const mapHtml = useMemo(() => {
     const messagesJson = JSON.stringify(messages);
-    const styleConfigJson = JSON.stringify(styleConfig);
     const userLat = userLocation.latitude;
     const userLng = userLocation.longitude;
 
@@ -159,7 +153,7 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       filter: blur(2px);
     }
 
-    /* Badge indicador 3D */
+    /* Badge indicador 3D en la esquina superior izquierda */
     .camera-badge {
       position: absolute;
       top: 14px;
@@ -185,19 +179,19 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       background: #2DC653;
       box-shadow: 0 0 6px #2DC653;
     }
+
   </style>
 </head>
 <body>
   <div class="camera-badge">
     <div class="camera-badge-dot"></div>
-    <span>MapLibre 3D (OSM Personalizable)</span>
+    <span>MapLibre 3D (OSM)</span>
   </div>
   <div id="map"></div>
 
   <script>
     const userCoords = [${userLng}, ${userLat}];
     const rawMessages = ${messagesJson};
-    let activeConfig = ${styleConfigJson};
 
     // Estilo vectorial abierto de OpenStreetMap con capas de extrusión 3D
     const osmVectorStyle = 'https://tiles.openfreemap.org/styles/liberty';
@@ -212,9 +206,10 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       bearing: -20,       // Rotación isométrica diorama
       antialias: true,
       maxPitch: 85,
+      attributionControl: false, // Desactivado en el mapa para evitar elementos invasivos
     });
 
-    // Control de navegación suave
+    // Control de navegación superior derecho (brújula)
     map.addControl(new maplibregl.NavigationControl({
       showCompass: true,
       showZoom: false,
@@ -264,77 +259,7 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
 
     renderMessages(rawMessages);
 
-    // Función para aplicar de forma dinámica las configuraciones de edificios, agua, vías y parques
-    function applyMapStyles(cfg) {
-      if (!cfg || !map.isStyleLoaded()) return;
-
-      // 1. Edificios 3D (Color, altura y opacidad)
-      if (map.getLayer('building-3d')) {
-        map.setPaintProperty('building-3d', 'fill-extrusion-color', cfg.buildingColor || '#d6eae3');
-        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', cfg.buildingOpacity || 0.92);
-        const mult = Number(cfg.buildingHeightMultiplier) || 1.0;
-        map.setPaintProperty('building-3d', 'fill-extrusion-height', [
-          '*',
-          ['coalesce', ['get', 'render_height'], 15],
-          mult
-        ]);
-      } else if (map.getSource('openmaptiles') && !map.getLayer('custom-3d-buildings')) {
-        map.addLayer({
-          'id': 'custom-3d-buildings',
-          'source': 'openmaptiles',
-          'source-layer': 'building',
-          'type': 'fill-extrusion',
-          'minzoom': 13,
-          'paint': {
-            'fill-extrusion-color': cfg.buildingColor || '#d6eae3',
-            'fill-extrusion-height': ['*', ['coalesce', ['get', 'render_height'], 15], cfg.buildingHeightMultiplier || 1.0],
-            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': cfg.buildingOpacity || 0.92
-          }
-        });
-      }
-
-      // 2. Agua, Lagos y Ríos
-      if (cfg.waterColor) {
-        if (map.getLayer('water')) {
-          map.setPaintProperty('water', 'fill-color', cfg.waterColor);
-        }
-        ['waterway_river', 'waterway_other', 'waterway_tunnel'].forEach(layerId => {
-          if (map.getLayer(layerId)) {
-            map.setPaintProperty(layerId, 'line-color', cfg.waterColor);
-          }
-        });
-      }
-
-      // 3. Parques y Zonas Verdes
-      if (cfg.parkColor) {
-        ['park', 'landuse_residential', 'landuse_pitch', 'landuse_track'].forEach(layerId => {
-          if (map.getLayer(layerId)) {
-            map.setPaintProperty(layerId, 'fill-color', cfg.parkColor);
-          }
-        });
-      }
-
-      // 4. Carreteras y Vías
-      if (cfg.roadColor) {
-        [
-          'road_area_pattern',
-          'road_motorway_link_casing',
-          'road_service_track_casing',
-          'road_link_casing',
-          'road_minor_casing',
-          'road_secondary_tertiary_casing',
-          'road_trunk_primary_casing',
-          'road_motorway_casing'
-        ].forEach(layerId => {
-          if (map.getLayer(layerId)) {
-            map.setPaintProperty(layerId, 'line-color', cfg.roadColor);
-          }
-        });
-      }
-    }
-
-    // Inicialización de estilos al cargar el mapa
+    // Ajuste de iluminación y extrusión de edificios 3D una vez cargado el estilo
     map.on('load', () => {
       // Luz direccional 3D para acentuar sombras y volumen
       map.setLight({
@@ -344,7 +269,32 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
         position: [1.5, 210, 45]
       });
 
-      applyMapStyles(activeConfig);
+      // Si existe la capa de edificios 3D en el estilo de OSM, acentuamos su volumen
+      if (map.getLayer('building-3d')) {
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.92);
+        map.setPaintProperty('building-3d', 'fill-extrusion-color', [
+          'interpolate',
+          ['linear'],
+          ['get', 'render_height'],
+          0, '#dbeae4',
+          40, '#c7ded7',
+          120, '#a2ccc0'
+        ]);
+      } else if (map.getSource('openmaptiles') && !map.getLayer('custom-3d-buildings')) {
+        map.addLayer({
+          'id': 'custom-3d-buildings',
+          'source': 'openmaptiles',
+          'source-layer': 'building',
+          'type': 'fill-extrusion',
+          'minzoom': 13,
+          'paint': {
+            'fill-extrusion-color': '#d3e4df',
+            'fill-extrusion-height': ['get', 'render_height'],
+            'fill-extrusion-base': ['get', 'render_min_height'],
+            'fill-extrusion-opacity': 0.88
+          }
+        });
+      }
     });
 
     // Envío de eventos hacia React Native / Host Web
@@ -363,9 +313,6 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data.type === 'UPDATE_MESSAGES') {
           renderMessages(data.messages);
-        } else if (data.type === 'UPDATE_STYLE_CONFIG') {
-          activeConfig = data.config;
-          applyMapStyles(data.config);
         } else if (data.type === 'RECENTER') {
           map.flyTo({
             center: [data.longitude, data.latitude],
@@ -408,19 +355,6 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       // Ignorar mensajes no serializados
     }
   };
-
-  // Notificar al mapa cuando cambia la configuración de estilos
-  useEffect(() => {
-    const payload = JSON.stringify({
-      type: 'UPDATE_STYLE_CONFIG',
-      config: styleConfig,
-    });
-    if (Platform.OS === 'web' && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(payload, '*');
-    } else if (webViewRef.current) {
-      webViewRef.current.postMessage(payload);
-    }
-  }, [styleConfig]);
 
   // Función para recentrar el mapa
   const recenterMap = () => {
@@ -494,18 +428,8 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
         </View>
       )}
 
-      {/* Botones de control de cámara 3D estilo consola Nintendo */}
+      {/* Botones de control de cámara 3D ubicados en el lateral superior derecho (evitando el solapamiento con la marca de agua) */}
       <View style={styles.controlsOverlay}>
-        {onOpenStyleConfig && (
-          <TouchableOpacity
-            style={[styles.circleButton, styles.paletteButton]}
-            onPress={onOpenStyleConfig}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="color-palette" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
-
         <TouchableOpacity
           style={styles.circleButton}
           onPress={recenterMap}
@@ -561,25 +485,21 @@ const styles = StyleSheet.create({
   },
   controlsOverlay: {
     position: 'absolute',
-    bottom: 24,
-    right: 18,
+    top: 56,
+    right: 14,
     flexDirection: 'column',
-    gap: 12,
+    gap: 10,
     zIndex: 30,
   },
   circleButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#D3DFDC',
     ...nintendoTheme.shadows.wiiSoft,
-  },
-  paletteButton: {
-    backgroundColor: nintendoTheme.colors.wiiBlue,
-    borderColor: '#0083B8',
   },
 });
