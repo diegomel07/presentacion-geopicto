@@ -152,41 +152,9 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       margin-top: 9px;
       filter: blur(2px);
     }
-
-    /* Badge indicador 3D en la esquina superior izquierda */
-    .camera-badge {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      background: rgba(255, 255, 255, 0.94);
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-      color: #283338;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      border: 1px solid #D8E2E0;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      z-index: 10;
-      pointer-events: none;
-    }
-    .camera-badge-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #2DC653;
-      box-shadow: 0 0 6px #2DC653;
-    }
-
   </style>
 </head>
 <body>
-  <div class="camera-badge">
-    <div class="camera-badge-dot"></div>
-    <span>MapLibre 3D (OSM)</span>
-  </div>
   <div id="map"></div>
 
   <script>

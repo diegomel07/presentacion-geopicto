@@ -10,12 +10,11 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LocationCoords, MessageStatus } from '../../types';
+import { LocationCoords } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useMessages } from '../../context/MessagesContext';
 import { nintendoTheme } from '../../theme/nintendoTheme';
 import { WiiButton } from '../common/WiiButton';
-import { StatusBadge } from '../common/StatusBadge';
 
 interface CreateMessageModalProps {
   visible: boolean;
@@ -32,7 +31,6 @@ export const CreateMessageModal: React.FC<CreateMessageModalProps> = ({
   const { createMessage } = useMessages();
 
   const [content, setContent] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<MessageStatus>('publicado');
   const [errorMsg, setErrorMsg] = useState('');
 
   const charLimit = 140;
@@ -40,7 +38,7 @@ export const CreateMessageModal: React.FC<CreateMessageModalProps> = ({
 
   const handlePublish = () => {
     setErrorMsg('');
-    const res = createMessage(content, targetCoords, selectedStatus, 24);
+    const res = createMessage(content, targetCoords, 'publicado', 24);
     if (res.success) {
       setContent('');
       onClose();
@@ -54,14 +52,6 @@ export const CreateMessageModal: React.FC<CreateMessageModalProps> = ({
     setContent('');
     onClose();
   };
-
-  // Estimación de expiración a 24 horas
-  const estimatedExpiration = new Date(Date.now() + 24 * 3600 * 1000).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: 'numeric',
-    month: 'short',
-  });
 
   return (
     <Modal
@@ -130,44 +120,12 @@ export const CreateMessageModal: React.FC<CreateMessageModalProps> = ({
             </View>
           </View>
 
-          {/* Metadatos asignados automáticamente por el sistema */}
-          <View style={styles.systemMetadataBox}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Ubicación asignada:</Text>
-              <Text style={styles.metaValue}>
-                {targetCoords.latitude.toFixed(4)}, {targetCoords.longitude.toFixed(4)}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Expiración automática:</Text>
-              <Text style={styles.metaValue}>{estimatedExpiration} (+24h)</Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Estado inicial:</Text>
-              <View style={styles.statusToggleGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.statusPillOption,
-                    selectedStatus === 'publicado' && styles.statusPillActive,
-                  ]}
-                  onPress={() => setSelectedStatus('publicado')}
-                >
-                  <StatusBadge status="publicado" size="sm" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.statusPillOption,
-                    selectedStatus === 'pendiente' && styles.statusPillActive,
-                  ]}
-                  onPress={() => setSelectedStatus('pendiente')}
-                >
-                  <StatusBadge status="pendiente" size="sm" />
-                </TouchableOpacity>
-              </View>
-            </View>
+          {/* Aviso de expiración en 24 horas */}
+          <View style={styles.expirationNoticeBox}>
+            <Ionicons name="time-outline" size={17} color={nintendoTheme.colors.wiiBlue} />
+            <Text style={styles.expirationNoticeText}>
+              El mensaje expira en 24 horas
+            </Text>
           </View>
 
           {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
@@ -303,41 +261,22 @@ const styles = StyleSheet.create({
   counterExceeded: {
     color: '#DC2626',
   },
-  systemMetadataBox: {
-    backgroundColor: '#F5F9F7',
+  expirationNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F8F6',
     borderRadius: nintendoTheme.borderRadius.sm,
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginTop: 12,
-    gap: 6,
     borderWidth: 1,
     borderColor: '#DFECE7',
   },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  metaLabel: {
-    fontSize: 11,
+  expirationNoticeText: {
+    fontSize: 12,
     fontWeight: '600',
     color: nintendoTheme.colors.textSecondary,
-  },
-  metaValue: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: nintendoTheme.colors.textPrimary,
-  },
-  statusToggleGroup: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  statusPillOption: {
-    opacity: 0.5,
-    padding: 2,
-    borderRadius: nintendoTheme.borderRadius.pill,
-  },
-  statusPillActive: {
-    opacity: 1,
   },
   errorText: {
     color: '#DC2626',

@@ -93,9 +93,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
             </View>
             <View>
               <Text style={styles.userNameText} numberOfLines={1}>
-                {user?.username || 'Invitado'}
+                {user?.username ? (user.username.startsWith('@') ? user.username : `@${user.username}`) : '@Invitado'}
               </Text>
-              <Text style={styles.userRoomText}>{user?.email || 'Explorador Geoespacial'}</Text>
             </View>
           </View>
 
@@ -277,11 +276,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: nintendoTheme.colors.textPrimary,
-  },
-  userRoomText: {
-    fontSize: 11,
-    color: nintendoTheme.colors.textSecondary,
-    fontWeight: '500',
   },
   exitButton: {
     width: 34,
