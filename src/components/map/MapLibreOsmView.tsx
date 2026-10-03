@@ -7,7 +7,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GeoMessage, LocationCoords } from '../../types';
+import { GeoMessage, LocationCoords, RangeDistance } from '../../types';
 import { nintendoTheme } from '../../theme/nintendoTheme';
 
 // WebView condicional para plataformas nativas
@@ -23,13 +23,17 @@ if (Platform.OS !== 'web') {
 interface MapLibreOsmViewProps {
   userLocation: LocationCoords;
   messages: GeoMessage[];
+  rangeDistance: RangeDistance;
   onSelectMessage: (message: GeoMessage) => void;
+  onVisibleMessagesChange?: (visibleIds: string[]) => void;
 }
 
 export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
   userLocation,
   messages,
+  rangeDistance,
   onSelectMessage,
+  onVisibleMessagesChange,
 }) => {
   const webViewRef = useRef<any>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -159,7 +163,58 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
 
   <script>
     const userCoords = [${userLng}, ${userLat}];
-    const rawMessages = ${messagesJson};
+    let currentCenter = [${userLng}, ${userLat}];
+    let currentRange = ${rangeDistance};
+    let allMessages = ${messagesJson};
+    let isMapLoaded = false;
+    const markersMap = new Map();
+
+    // Generador de círculo geodésico exacto en metros
+    function getGeoJSONCircle(centerLng, centerLat, radiusMeters, points = 64) {
+      const coords = [];
+      const earthRadius = 6371000;
+      const d = radiusMeters / earthRadius;
+      const latRad = centerLat * Math.PI / 180;
+      const lngRad = centerLng * Math.PI / 180;
+
+      for (let i = 0; i <= points; i++) {
+        const bearing = (i * 2 * Math.PI) / points;
+        const pLat = Math.asin(
+          Math.sin(latRad) * Math.cos(d) +
+          Math.cos(latRad) * Math.sin(d) * Math.cos(bearing)
+        );
+        const pLng = lngRad + Math.atan2(
+          Math.sin(bearing) * Math.sin(d) * Math.cos(latRad),
+          Math.cos(d) - Math.sin(latRad) * Math.sin(pLat)
+        );
+        coords.push([pLng * 180 / Math.PI, pLat * 180 / Math.PI]);
+      }
+
+      return {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [coords]
+          },
+          properties: {}
+        }]
+      };
+    }
+
+    // Cálculo de distancia esférica (Haversine) en metros
+    function getDistanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
 
     // Estilo vectorial abierto de OpenStreetMap con capas de extrusión 3D
     const osmVectorStyle = 'https://tiles.openfreemap.org/styles/liberty';
@@ -177,7 +232,7 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       attributionControl: false, // Desactivado en el mapa para evitar elementos invasivos
     });
 
-    // Marcador del usuario actual
+    // Marcador del usuario actual (permanece en su posición real)
     const userEl = document.createElement('div');
     userEl.className = 'user-marker';
     userEl.innerHTML = '<div class="user-marker-pulse"></div><div class="user-marker-dot"></div>';
@@ -185,43 +240,132 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       .setLngLat(userCoords)
       .addTo(map);
 
-    // Marcadores 3D tipo Billboard para cada mensaje
-    const markers = [];
-    function renderMessages(msgs) {
-      markers.forEach(m => m.remove());
-      markers.length = 0;
+    function updateRangeCircle() {
+      if (!isMapLoaded) return;
+      const source = map.getSource('range-circle-source');
+      if (source) {
+        source.setData(getGeoJSONCircle(currentCenter[0], currentCenter[1], currentRange));
+      }
+    }
 
-      msgs.forEach(msg => {
-        if (msg.status === 'eliminado') return;
+    function syncMessages(msgs) {
+      allMessages = msgs;
 
-        const el = document.createElement('div');
-        el.className = 'billboard-marker';
-        el.innerHTML = \`
-          <div class="billboard-bubble">
-            <div class="billboard-avatar" style="background: \${msg.authorColor};"></div>
-            <div class="billboard-text">\${msg.content.substring(0, 20)}\${msg.content.length > 20 ? '...' : ''}</div>
-          </div>
-          <div class="billboard-shadow"></div>
-        \`;
+      // Limpiar marcadores que ya no existan
+      markersMap.forEach((entry, id) => {
+        if (!allMessages.some(m => m.id === id)) {
+          entry.marker.remove();
+          markersMap.delete(id);
+        }
+      });
 
-        // Tocar el marcador abre el detalle del mensaje
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          notifyParent({ type: 'SELECT_MESSAGE', id: msg.id });
-        });
+      allMessages.forEach(msg => {
+        if (msg.status === 'eliminado') {
+          if (markersMap.has(msg.id)) {
+            markersMap.get(msg.id).marker.remove();
+            markersMap.delete(msg.id);
+          }
+          return;
+        }
 
-        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-          .setLngLat([msg.longitude, msg.latitude])
-          .addTo(map);
+        if (!markersMap.has(msg.id)) {
+          const el = document.createElement('div');
+          el.className = 'billboard-marker';
+          el.innerHTML = \`
+            <div class="billboard-bubble">
+              <div class="billboard-avatar" style="background: \${msg.authorColor};"></div>
+              <div class="billboard-text">\${msg.content.substring(0, 20)}\${msg.content.length > 20 ? '...' : ''}</div>
+            </div>
+            <div class="billboard-shadow"></div>
+          \`;
 
-        markers.push(marker);
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            notifyParent({ type: 'SELECT_MESSAGE', id: msg.id });
+          });
+
+          const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([msg.longitude, msg.latitude]);
+
+          markersMap.set(msg.id, { marker, msg, isVisible: false });
+        } else {
+          markersMap.get(msg.id).msg = msg;
+        }
+      });
+
+      updateVisibility();
+    }
+
+    function updateVisibility() {
+      const centerLng = currentCenter[0];
+      const centerLat = currentCenter[1];
+      const visibleIds = [];
+
+      markersMap.forEach((entry, id) => {
+        const msg = entry.msg;
+        const dist = getDistanceMeters(centerLat, centerLng, msg.latitude, msg.longitude);
+        const shouldBeVisible = dist <= currentRange;
+
+        if (shouldBeVisible) {
+          visibleIds.push(id);
+          if (!entry.isVisible) {
+            entry.marker.addTo(map);
+            entry.isVisible = true;
+          }
+        } else {
+          if (entry.isVisible) {
+            entry.marker.remove();
+            entry.isVisible = false;
+          }
+        }
+      });
+
+      notifyParent({
+        type: 'VISIBLE_MESSAGES_CHANGED',
+        ids: visibleIds
       });
     }
 
-    renderMessages(rawMessages);
+    // Movimiento del mapa (vista libre): actualiza el centro del radio en tiempo real
+    map.on('move', () => {
+      const c = map.getCenter();
+      currentCenter = [c.lng, c.lat];
+      updateRangeCircle();
+      updateVisibility();
+    });
 
-    // Ajuste de iluminación y extrusión de edificios 3D una vez cargado el estilo
+    // Ajuste de iluminación, extrusión 3D y círculo de rango una vez cargado el estilo
     map.on('load', () => {
+      isMapLoaded = true;
+
+      // Capa de círculo de rango activo en el terreno
+      map.addSource('range-circle-source', {
+        type: 'geojson',
+        data: getGeoJSONCircle(currentCenter[0], currentCenter[1], currentRange)
+      });
+
+      map.addLayer({
+        id: 'range-circle-fill',
+        type: 'fill',
+        source: 'range-circle-source',
+        paint: {
+          'fill-color': '#009CD8',
+          'fill-opacity': 0.15
+        }
+      });
+
+      map.addLayer({
+        id: 'range-circle-stroke',
+        type: 'line',
+        source: 'range-circle-source',
+        paint: {
+          'line-color': '#0084B4',
+          'line-width': 2.5,
+          'line-opacity': 0.85,
+          'line-dasharray': [3, 2]
+        }
+      });
+
       // Luz direccional 3D para acentuar sombras y volumen
       map.setLight({
         anchor: 'viewport',
@@ -256,6 +400,9 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
           }
         });
       }
+
+      // Sincronizar mensajes iniciales
+      syncMessages(allMessages);
     });
 
     // Envío de eventos hacia React Native / Host Web
@@ -273,7 +420,11 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data.type === 'UPDATE_MESSAGES') {
-          renderMessages(data.messages);
+          syncMessages(data.messages);
+        } else if (data.type === 'SET_RANGE') {
+          currentRange = data.radius;
+          updateRangeCircle();
+          updateVisibility();
         } else if (data.type === 'RECENTER') {
           map.flyTo({
             center: [data.longitude, data.latitude],
@@ -302,7 +453,33 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
 </body>
 </html>
     `;
-  }, [userLocation.latitude, userLocation.longitude, messages]);
+  }, [userLocation.latitude, userLocation.longitude]);
+
+  // Enviar cambio de rango al mapa
+  useEffect(() => {
+    const payload = JSON.stringify({
+      type: 'SET_RANGE',
+      radius: rangeDistance,
+    });
+    if (Platform.OS === 'web' && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(payload, '*');
+    } else if (webViewRef.current) {
+      webViewRef.current.postMessage(payload);
+    }
+  }, [rangeDistance]);
+
+  // Sincronizar mensajes cuando cambien
+  useEffect(() => {
+    const payload = JSON.stringify({
+      type: 'UPDATE_MESSAGES',
+      messages,
+    });
+    if (Platform.OS === 'web' && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(payload, '*');
+    } else if (webViewRef.current) {
+      webViewRef.current.postMessage(payload);
+    }
+  }, [messages]);
 
   // Manejador de eventos entrantes desde el mapa
   const handleMapMessage = (eventData: string) => {
@@ -311,6 +488,10 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       if (parsed.type === 'SELECT_MESSAGE') {
         const found = messages.find((m) => m.id === parsed.id);
         if (found) onSelectMessage(found);
+      } else if (parsed.type === 'VISIBLE_MESSAGES_CHANGED') {
+        if (onVisibleMessagesChange) {
+          onVisibleMessagesChange(parsed.ids);
+        }
       }
     } catch (e) {
       // Ignorar mensajes no serializados
@@ -362,7 +543,7 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       window.addEventListener('message', listener);
       return () => window.removeEventListener('message', listener);
     }
-  }, [messages, onSelectMessage]);
+  }, [messages, onSelectMessage, onVisibleMessagesChange]);
 
   return (
     <View style={styles.container}>

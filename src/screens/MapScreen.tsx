@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
 import { useMessages } from '../context/MessagesContext';
-import { GeoMessage, LocationCoords, MessageStatus } from '../types';
+import { GeoMessage, LocationCoords, MessageStatus, RangeDistance } from '../types';
 import { nintendoTheme } from '../theme/nintendoTheme';
 import { MapLibreOsmView } from '../components/map/MapLibreOsmView';
+import { RangeConfigModal } from '../components/map/RangeConfigModal';
 import { CreateMessageModal } from '../components/messages/CreateMessageModal';
 import { MessageDetailModal } from '../components/messages/MessageDetailModal';
 import { PictoChatCard } from '../components/common/PictoChatCard';
+import { calculateDistanceMeters } from '../utils/geoUtils';
 
 interface MapScreenProps {
   onLogout: () => void;
@@ -40,9 +42,28 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
   } = useMessages();
 
   const [userLocation, setUserLocation] = useState<LocationCoords>(DEFAULT_COORDS);
+  const [rangeDistance, setRangeDistance] = useState<RangeDistance>(300);
+  const [rangeModalVisible, setRangeModalVisible] = useState(false);
+  const [visibleMessageIds, setVisibleMessageIds] = useState<string[] | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [targetComposeCoords, setTargetComposeCoords] = useState<LocationCoords>(DEFAULT_COORDS);
   const [bottomListExpanded, setBottomListExpanded] = useState(false);
+
+  // Mensajes dentro del rango activo
+  const inRangeMessages = useMemo(() => {
+    if (!visibleMessageIds) {
+      return activeMessages.filter(
+        (m) =>
+          calculateDistanceMeters(
+            userLocation.latitude,
+            userLocation.longitude,
+            m.latitude,
+            m.longitude
+          ) <= rangeDistance
+      );
+    }
+    return activeMessages.filter((m) => visibleMessageIds.includes(m.id));
+  }, [activeMessages, visibleMessageIds, userLocation, rangeDistance]);
 
   // Obtener geolocalización del dispositivo
   useEffect(() => {
@@ -98,14 +119,26 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
             </View>
           </View>
 
-          {/* Botón de salir / cerrar sesión */}
-          <TouchableOpacity
-            style={styles.exitButton}
-            onPress={onLogout}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="log-out-outline" size={16} color={nintendoTheme.colors.textSecondary} />
-          </TouchableOpacity>
+          {/* Grupo de acciones de la barra superior: Configuración de Rango y Salir */}
+          <View style={styles.topBarActions}>
+            <TouchableOpacity
+              style={styles.rangeButton}
+              onPress={() => setRangeModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="radio-outline" size={15} color={nintendoTheme.colors.wiiBlue} />
+              <Text style={styles.rangeButtonText}>{rangeDistance}m</Text>
+            </TouchableOpacity>
+
+            {/* Botón de salir / cerrar sesión */}
+            <TouchableOpacity
+              style={styles.exitButton}
+              onPress={onLogout}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="log-out-outline" size={16} color={nintendoTheme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Barra horizontal de filtros de estado estilo píldora Nintendo */}
@@ -147,7 +180,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
           <MapLibreOsmView
             userLocation={userLocation}
             messages={activeMessages}
+            rangeDistance={rangeDistance}
             onSelectMessage={handleSelectMessage}
+            onVisibleMessagesChange={setVisibleMessageIds}
           />
 
           {/* Botón Flotante de Acción (FAB) con forma de Stylus PictoChat ubicado en la esquina inferior izquierda */}
@@ -175,7 +210,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
               <View style={styles.sheetTitleGroup}>
                 <Ionicons name="newspaper-outline" size={16} color={nintendoTheme.colors.wiiBlue} />
                 <Text style={styles.sheetTitle}>
-                  Notas en el Área ({activeMessages.length})
+                  Notas en el Área ({inRangeMessages.length})
                 </Text>
               </View>
               <Ionicons
@@ -192,12 +227,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 16 }}
             >
-              {activeMessages.length === 0 ? (
+              {inRangeMessages.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No hay notas con este filtro en esta área.</Text>
+                  <Text style={styles.emptyText}>No hay notas dentro del rango ({rangeDistance}m).</Text>
                 </View>
               ) : (
-                activeMessages.map((msg) => (
+                inRangeMessages.map((msg) => (
                   <PictoChatCard
                     key={msg.id}
                     message={msg}
@@ -222,6 +257,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onLogout }) => {
           message={selectedMessage}
           visible={!!selectedMessage}
           onClose={() => setSelectedMessage(null)}
+        />
+
+        {/* Modal de Configuración de Rango de Mensajes */}
+        <RangeConfigModal
+          visible={rangeModalVisible}
+          onClose={() => setRangeModalVisible(false)}
+          currentRange={rangeDistance}
+          onSelectRange={setRangeDistance}
         />
       </View>
     </SafeAreaView>
@@ -276,6 +319,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: nintendoTheme.colors.textPrimary,
+  },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EBF6FC',
+    borderWidth: 1.5,
+    borderColor: '#BAE3F7',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: nintendoTheme.borderRadius.pill,
+  },
+  rangeButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: nintendoTheme.colors.wiiBlue,
   },
   exitButton: {
     width: 34,

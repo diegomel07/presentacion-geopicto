@@ -24,3 +24,5 @@ export interface LocationCoords {
   latitude: number;
   longitude: number;
 }
+
+export type RangeDistance = 100 | 300 | 500;
