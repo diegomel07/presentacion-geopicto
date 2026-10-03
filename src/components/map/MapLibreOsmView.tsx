@@ -209,13 +209,6 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
       attributionControl: false, // Desactivado en el mapa para evitar elementos invasivos
     });
 
-    // Control de navegación superior derecho (brújula)
-    map.addControl(new maplibregl.NavigationControl({
-      showCompass: true,
-      showZoom: false,
-      visualizePitch: true
-    }), 'top-right');
-
     // Marcador del usuario actual
     const userEl = document.createElement('div');
     userEl.className = 'user-marker';
@@ -428,30 +421,22 @@ export const MapLibreOsmView: React.FC<MapLibreOsmViewProps> = ({
         </View>
       )}
 
-      {/* Botones de control de cámara 3D ubicados en el lateral superior derecho (evitando el solapamiento con la marca de agua) */}
+      {/* Botones de control de cámara ubicados en la parte inferior derecha */}
       <View style={styles.controlsOverlay}>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={rotateCamera}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="sync-outline" size={19} color={nintendoTheme.colors.textPrimary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.circleButton}
           onPress={recenterMap}
           activeOpacity={0.8}
         >
           <Ionicons name="locate" size={20} color={nintendoTheme.colors.wiiBlue} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.circleButton}
-          onPress={toggleIsometricAngle}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="cube-outline" size={20} color={nintendoTheme.colors.textPrimary} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.circleButton}
-          onPress={rotateCamera}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="sync-outline" size={18} color={nintendoTheme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -485,16 +470,16 @@ const styles = StyleSheet.create({
   },
   controlsOverlay: {
     position: 'absolute',
-    top: 56,
-    right: 14,
+    bottom: 20,
+    right: 16,
     flexDirection: 'column',
     gap: 10,
     zIndex: 30,
   },
   circleButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
